@@ -1,65 +1,91 @@
-name: K8s Deployment
- 
+name: Build and Deploy to EKS
+
 on:
   push:
     branches:
       - main
- 
+
+env:
+  AWS_REGION: ap-south-1
+  EKS_CLUSTER_NAME: my-project
+  ECR_REPOSITORY: anil-docker
+
 jobs:
+
   build-and-push:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
- 
+
     steps:
+
       - name: Checkout source code
         uses: actions/checkout@v4
- 
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: <AWS_REGION>
- 
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
- 
-      - name: Build, Tag, and Push Docker Image to Amazon ECR
+
+      - name: Build Docker Image
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY: mysite
-          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
-          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
- 
+          docker build \
+            -t $REGISTRY/$ECR_REPOSITORY:${{ github.sha }} .
+
+      - name: Push Docker Image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker push \
+            $REGISTRY/$ECR_REPOSITORY:${{ github.sha }}
+
+
   deploy:
-    name: deploy the docker container into k8s
+    name: Deploy to EKS
     runs-on: ubuntu-latest
+
     needs: build-and-push
- 
+
     steps:
+
       - name: Checkout source code
         uses: actions/checkout@v4
- 
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: <AWS_REGION>
- 
-      - name: configure EKS cluster with kubectl
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure kubectl
         run: |
-          aws eks update-kubeconfig --region <AWS_REGION> --name <EKS_CLUSTER_NAME>
- 
-      - name: replacing the image-id with github.sha
+          aws eks update-kubeconfig \
+            --region $AWS_REGION \
+            --name $EKS_CLUSTER_NAME
+
+      - name: Update Image
         run: |
-          sed -i "s|IMAGE_ID|${{ github.sha }}|g" k8s/deployment.yaml
- 
-      - name: Deploy to EKS cluster
+          sed -i \
+            "s|IMAGE_ID|${{ github.sha }}|g" \
+            k8s/deployment.yaml
+
+      - name: Deploy to EKS
         run: |
           kubectl apply -f k8s/deployment.yaml
           kubectl apply -f k8s/service.yaml
           kubectl apply -f k8s/ingress.yaml
+
+      - name: Check Deployment
+        run: |
+          kubectl rollout status deployment/mysite
+          kubectl get pods
+          kubectl get service mysite
+          kubectl get ingress mysite
