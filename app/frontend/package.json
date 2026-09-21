@@ -1,7 +1,7 @@
 {
   "name": "aniflix-frontend",
   "version": "1.0.0",
-  "description": "Aniflix - a Netflix-style streaming UI for browsing anime",
+  "description": "Aniflix - a Netflix-style streaming UI for browsing animes",
   "type": "module",
   "scripts": {
     "dev": "vite",
