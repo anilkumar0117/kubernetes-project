@@ -1,117 +1,64 @@
-name: Build and Deploy to EKS
+name: Kubernetes Deployment
 
 on:
   push:
     branches:
       - main
 
-env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
-  EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-
 jobs:
-  build-and-deploy:
 
+  build-and-deploy:
+    name: Build, Push and Deploy
     runs-on: ubuntu-latest
 
     steps:
 
-      # 1. Checkout source code
-      - name: Checkout code
+      - name: Checkout source code
         uses: actions/checkout@v4
 
-      # 2. Configure AWS credentials
-      - name: Configure AWS credentials
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ap-south-1
 
-      # 3. Login to Amazon ECR
       - name: Login to Amazon ECR
+        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 4. Get AWS Account ID
-      - name: Get AWS Account ID
+      - name: Build and Push Docker Image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: anil-docker
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity \
-            --query Account \
-            --output text)
+          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG ./app
+          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
-          echo "ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
-
-      # 5. Build Docker image
-      - name: Build Docker image
-        run: |
-          docker build \
-            -t $ECR_REPOSITORY:$GITHUB_SHA \
-            ./app
-
-      # 6. Tag Docker image
-      - name: Tag Docker image
-        run: |
-          docker tag \
-            $ECR_REPOSITORY:$GITHUB_SHA \
-            $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$GITHUB_SHA
-
-      # 7. Push Docker image to ECR
-      - name: Push image to ECR
-        run: |
-          docker push \
-            $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$GITHUB_SHA
-
-      # 8. Configure kubectl for EKS
-      - name: Update kubeconfig
+      - name: Configure kubectl
         run: |
           aws eks update-kubeconfig \
-            --region $AWS_REGION \
-            --name $EKS_CLUSTER_NAME
+            --region ap-south-1 \
+            --name my-cluster
 
-      # 9. Update Kubernetes Deployment image
-      - name: Update deployment image
+      - name: Update Kubernetes Image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: anil-docker
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          sed -i \
-            "s|IMAGE_PLACEHOLDER|$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$GITHUB_SHA|g" \
-            "k8's/deployment.yaml"
+          sed -i "s|IMAGE_PLACEHOLDER|$REGISTRY/$REPOSITORY:$IMAGE_TAG|g" "k8's/deployment.yaml"
 
-      # 10. Check Kubernetes files
-      - name: Check Kubernetes files
-        run: |
-          echo "Current directory:"
-          pwd
-
-          echo ""
-          echo "Repository structure:"
-          find . -maxdepth 3 -type f | sort
-
-          echo ""
-          echo "Kubernetes folder:"
-          ls -la "k8's"
-
-      # 11. Deploy Kubernetes manifests
-      - name: Deploy to EKS
+      - name: Deploy to Kubernetes
         run: |
           kubectl apply -f "k8's/deployment.yaml"
           kubectl apply -f "k8's/service.yaml"
           kubectl apply -f "k8's/ingress.yaml"
 
-      # 12. Wait for deployment
-      - name: Wait for deployment
+      - name: Check Deployment
         run: |
           kubectl rollout status deployment/my-app --timeout=180s
-
-      # 13. Verify deployment
-      - name: Verify deployment
-        run: |
-          echo "===== PODS ====="
-          kubectl get pods -o wide
-
-          echo ""
-          echo "===== SERVICES ====="
+          kubectl get pods
           kubectl get svc
-
-          echo ""
-          echo "===== INGRESS ====="
           kubectl get ingress
