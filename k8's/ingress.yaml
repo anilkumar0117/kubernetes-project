@@ -11,10 +11,8 @@ metadata:
     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-south-1:520819077072:certificate/397e2b57-f75d-4dd0-a0f3-9f94f135d1a3
     alb.ingress.kubernetes.io/healthcheck-path: /
     alb.ingress.kubernetes.io/success-codes: '200'
-
 spec:
   ingressClassName: alb
-
   rules:
     - host: anildevops.space
       http:
