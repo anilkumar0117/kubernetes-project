@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: "mysite"
-          image: "<AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/mysite:IMAGE_ID"
+          image: "520819077072.dkr.ecr.<AWS_REGION>.amazonaws.com/mysite:IMAGE_ID"
           ports:
             - containerPort: 5000
           resources:
