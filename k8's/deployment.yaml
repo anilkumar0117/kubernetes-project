@@ -1,28 +1,34 @@
-apiVersion: "apps/v1"
-kind: "Deployment"
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: "mysite"
+  name: mysite
   labels:
-    app: "mysite"
+    app: mysite
 spec:
   replicas: 2
+
   selector:
     matchLabels:
-      app: "mysite"
+      app: mysite
+
   template:
     metadata:
       labels:
-        app: "mysite"
+        app: mysite
+
     spec:
       containers:
-        - name: "mysite"
-          image: "<AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/mysite:IMAGE_ID"
+        - name: mysite
+          image: 520819077072.dkr.ecr.ap-south-1.amazonaws.com/anil-docker:IMAGE_ID
+
           ports:
             - containerPort: 5000
+
           resources:
             requests:
               memory: "64Mi"
               cpu: "250m"
+
             limits:
               memory: "128Mi"
               cpu: "500m"
